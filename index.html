@@ -1,0 +1,166 @@
+<!-- Allows users to add todos Saves todos in the browser's local Storage Displays todos on the page. Let's users delete todos. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Todo List</h1>
+
+        <form id="todoForm" class="todo-form" novalidate>
+            <input type="text" id="inputValue" placeholder="Add a new task..." autocomplete="off">
+            <button class="btn" type="submit">Add</button>
+        </form>
+
+        <section class="todo-lists-elem" aria-live="polite"></section>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'youtubeTodoList';
+        const mainTodoElem = document.querySelector('.todo-lists-elem');
+        const inputValue = document.getElementById('inputValue');
+        const todoForm = document.getElementById('todoForm');
+
+        // load from localStorage and normalize older data (array of strings)
+        const loadTodos = () => {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return [];
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length && typeof parsed[0] === 'string') {
+                    return parsed.map(text => ({ id: Date.now() + Math.random(), text }));
+                }
+                return parsed;
+            } catch (e) {
+                return [];
+            }
+        };
+
+        const saveTodos = (todos) => {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+        };
+
+        let todos = loadTodos();
+
+        const createTodoElement = (todo) => {
+            const item = document.createElement('div');
+            item.className = 'todo-item';
+            item.dataset.id = todo.id;
+
+            item.innerHTML = `
+                <span class="todo-text">${escapeHtml(todo.text)}</span>
+                <div class="actions">
+                    <button class="editBtn" aria-label="Edit task">Edit</button>
+                    <button class="deleteBtn" aria-label="Delete task">Delete</button>
+                </div>
+            `;
+
+            return item;
+        };
+
+        const render = () => {
+            mainTodoElem.innerHTML = '';
+            if (todos.length === 0) {
+                mainTodoElem.innerHTML = '<p class="empty">No tasks yet. Add your first task!</p>';
+                return;
+            }
+            todos.forEach(t => mainTodoElem.append(createTodoElement(t)));
+        };
+
+        const addTodo = (text) => {
+            const trimmed = text.trim();
+            if (!trimmed) return;
+            // prevent exact duplicates
+            if (todos.some(t => t.text === trimmed)) return;
+            const newTodo = { id: Date.now() + Math.random(), text: trimmed };
+            todos.push(newTodo);
+            saveTodos(todos);
+            render();
+        };
+
+        const deleteTodo = (id) => {
+            todos = todos.filter(t => String(t.id) !== String(id));
+            saveTodos(todos);
+            render();
+        };
+
+        const startEdit = (itemElem) => {
+            const id = itemElem.dataset.id;
+            const todo = todos.find(t => String(t.id) === String(id));
+            if (!todo) return;
+
+            // replace text with input + save/cancel
+            const span = itemElem.querySelector('.todo-text');
+            const actions = itemElem.querySelector('.actions');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'edit-input';
+            input.value = todo.text;
+            span.replaceWith(input);
+
+            actions.innerHTML = `
+                <button class="saveBtn">Save</button>
+                <button class="cancelBtn">Cancel</button>
+            `;
+
+            input.focus();
+
+            const save = () => {
+                const val = input.value.trim();
+                if (!val) return;
+                todo.text = val;
+                saveTodos(todos);
+                render();
+            };
+
+            const cancel = () => render();
+
+            actions.querySelector('.saveBtn').addEventListener('click', save);
+            actions.querySelector('.cancelBtn').addEventListener('click', cancel);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') save();
+                if (e.key === 'Escape') cancel();
+            });
+        };
+
+        // escape simple HTML to prevent injection
+        function escapeHtml(str) {
+            return str.replace(/[&<>\"']/g, (tag) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '\"': '&quot;',
+                "'": '&#39;'
+            }[tag]));
+        }
+
+        // event delegation for edit/delete
+        mainTodoElem.addEventListener('click', (e) => {
+            const btn = e.target;
+            const item = btn.closest('.todo-item');
+            if (!item) return;
+            const id = item.dataset.id;
+
+            if (btn.classList.contains('deleteBtn')) {
+                deleteTodo(id);
+            } else if (btn.classList.contains('editBtn')) {
+                startEdit(item);
+            }
+        });
+
+        todoForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            addTodo(inputValue.value);
+            inputValue.value = '';
+            inputValue.focus();
+        });
+
+        // initial render
+        render();
+    </script>
+</body>
+</html>
